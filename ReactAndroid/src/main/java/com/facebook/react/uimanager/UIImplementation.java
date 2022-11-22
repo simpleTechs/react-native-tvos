@@ -31,6 +31,7 @@ import com.facebook.yoga.YogaDirection;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import com.facebook.react.common.build.ReactBuildConfig;
 
 /**
  * A class that is used to receive React commands from JS and translate them into a shadow node
@@ -742,13 +743,21 @@ public class UIImplementation {
   @Deprecated
   public void dispatchViewManagerCommand(
       int reactTag, int commandId, @Nullable ReadableArray commandArgs) {
-    assertViewExists(reactTag, "dispatchViewManagerCommand: " + commandId);
+        boolean viewExists = checkOrAssertViewExists(reactTag, "showPopupMenu");
+    if (!viewExists) {
+      return;
+    }
+
     mOperationsQueue.enqueueDispatchCommand(reactTag, commandId, commandArgs);
   }
 
   public void dispatchViewManagerCommand(
       int reactTag, String commandId, @Nullable ReadableArray commandArgs) {
-    assertViewExists(reactTag, "dispatchViewManagerCommand: " + commandId);
+        boolean viewExists = checkOrAssertViewExists(reactTag, "showPopupMenu");
+    if (!viewExists) {
+      return;
+    }
+
     mOperationsQueue.enqueueDispatchCommand(reactTag, commandId, commandArgs);
   }
 
@@ -763,7 +772,11 @@ public class UIImplementation {
    *     no arguments if the menu is dismissed
    */
   public void showPopupMenu(int reactTag, ReadableArray items, Callback error, Callback success) {
-    assertViewExists(reactTag, "showPopupMenu");
+    boolean viewExists = checkOrAssertViewExists(reactTag, "showPopupMenu");
+    if (!viewExists) {
+      return;
+    }
+
     mOperationsQueue.enqueueShowPopupMenu(reactTag, items, error, success);
   }
 
@@ -867,15 +880,28 @@ public class UIImplementation {
     outputBuffer[3] = node.getScreenHeight();
   }
 
-  private void assertViewExists(int reactTag, String operationNameForExceptionMessage) {
-    if (mShadowNodeRegistry.getNode(reactTag) == null) {
-      throw new IllegalViewOperationException(
-          "Unable to execute operation "
-              + operationNameForExceptionMessage
-              + " on view with "
-              + "tag: "
-              + reactTag
-              + ", since the view does not exists");
+  // Change from: https://github.com/facebook/react-native/commit/ee1a191cb1c10085722d57fc276734f83e86a4f3
+  private boolean checkOrAssertViewExists(int reactTag, String operationNameForExceptionMessage) {
+    boolean viewExists = mShadowNodeRegistry.getNode(reactTag) != null;
+    if (viewExists) {
+      return true;
+    }
+
+    String message =
+        "Unable to execute operation "
+            + operationNameForExceptionMessage
+            + " on view with "
+            + "tag: "
+            + reactTag
+            + ", since the view does not exist";
+
+    if (ReactBuildConfig.DEBUG) {
+      // Fixing ARD-776 for now this way.
+      // throw new IllegalViewOperationException(message);
+      return false;
+    } else {
+      FLog.w(ReactConstants.TAG, message);
+      return false;
     }
   }
 
